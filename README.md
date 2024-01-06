@@ -44,8 +44,67 @@ Makefile로 예제를 빌드하기 위해서는, 터미널을 열고 make 명령
 * DEBUG=1 : 최적화를 비활성화시키고 변수나 함수의 이름 정보를 포함시킴 (GCC의 -g 옵션)
 * ASAN=1 : 메모리 오류 탐지기인 address sanitizer 지원을 받아서 빌드 (GCC의 -fsanitize=address 옵션)
 
-## 
+## Sample 0: Create a Window for Metal Rendering
+00-window 예제는 Metal을 활용해서 그려진 내용을 보여주는 윈도우가 있는 맥OS 어플리케이션을 만드는 방법을 보여줍니다. 본 예제에서는 윈도우의 내용을 모두 지우고 빨간색을 칠합니다.
 
+프로그램은 main 함수로 시작합니다.
 
+```c++
+MyAppDelegate del;
+
+NS::Application* pSharedApplication = NS::Application::sharedApplication();
+pSharedApplication -> setDelegate( &del );
+pSharedApplication -> run();
+```
+
+윈도우를 만들기 위해서, 공유 어플리케이션 객체를 생성하고 사용자 지정 어플리케이션 대행자(NS::ApplicationDelegate 서브클래스의 인스턴스)를 설정합니다. 대행자는 시스템 이벤트 알림을 받고, 특별히 어플리케이션 실행시 로딩이 끝나고 윈도우를 만들 준비가 되었다는 알림을 받습니다. 
+
+어플리케이션 로딩이 끝났다는 알림을 받으면 applicationDidFinishLaunching() 메소드가 실행됩니다. 본 예제에서는 이 메소드를 오버라이드하여 윈도우, 메뉴, Metal 내용 뷰를 생성합니다.
+
+본 예제에서는 MTK::View 클래스를 써서 Metal 내용을 화면에 나타냅니다. MTK::View는 또한 일정 시간마다 렌더링을 실행시키는 반복문을 제공합니다. applicationDidFinishLaunching() 메소드는 뷰를 초기화시키며, 초기화 과정에서는 CGRect 객체에 뷰의 가로, 세로 길이를 저장하고, MTL::Device 객체에 시스템 GPU에 접근할 수 있는 루트를 저장합니다. 이 메소드는 또한 뷰의 렌더링 타겟의 픽셀 포맷과 배경색을 설정합니다.
+
+```c++
+_pMtkView = MTK::View::alloc()->init( frame, _pDevice );
+_pMtkView->setColorPixelFormat( MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB );
+_pMtkView->setClearColor( MTL::ClearColor::Make( 1.0, 0.0, 0.0, 1.0 ) );
+```
+
+applicationDidFinishLaunching() 메소드는 또한 MyMTKViewDelegate 클래스 인스턴스를 대행자로 설정합니다.
+
+```c++
+_pViewDelegate = new MyMTKViewDelegate( _pDevice );
+_pMtkView->setDelegate( _pViewDelegate );
+```
+
+MyMTKViewDelegate는 MTK::ViewDelegate 클래스의 서브클래스입니다. MTK::ViewDelegate는 MTK::View가 이벤트를 포워드할 수 있는 인터페이스를 제공합니다. 슈퍼클래스의 가상 함수를 오버라이딩 함으로써 MyMTKViewDelegate는 해당 이벤트에 반응할 수 있습니다. MTK::View는 drawInMTKView() 메소드를 프레임마다 호출해서 렌더링을 업데이트합니다.
+
+```c++
+void MyMTKViewDelegate::drawInMTKView( MTK::View* pView )
+{
+    _pRenderer->draw( pView );
+}
+```
+
+drawInMTKView()는 Renderer 클래스의 draw() 메소드를 호출합니다. draw() 메소드는 뷰의 배경색을 설정하는데 필요한 최소한의 작업을 합니다.
+
+```c++
+MTL::CommandBuffer* pCmd = _pCommandQueue->commandBuffer();
+MTL::RenderPassDescriptor* pRpd = pView->currentRenderPassDescriptor();
+MTL::RenderCommandEncoder* pEnc = pCmd->renderCommandEncoder( pRpd );
+pEnc->endEncoding();
+pCmd->presentDrawable( pView->currentDrawable() );
+pCmd->commit();
+```
+
+draw()메소드는 다음과 같은 일을 합니다:
+1. 명령 버퍼 객체를 만듭니다. 이를 통해 GPU에서 실행할 명령들을 인코딩할 수 있습니다.
+2. 렌더링 명령어 인코더 객체를 만듭니다. 명령어 인코더는 명령 버퍼가 그리기 명령어를 받을 수 있게 준비시키고, 그리기 시작과 끝에서 실행할 작업을 지정합니다. 
+3. current drawable을 화면에 나타내 GPU 작업 결과를 화면에 보이게 하는 명령을 인코딩합니다.
+4. 명령 버퍼를 GPU에서 실행시키기 위해서 명령 큐에 제출합니다. 
+
+본 예제에서 MTLRenderCommandEncoder 객체는 명시적으로 어떤 명령도 인코딩하지 않습니다. 하지만, 인코더를 생성할 때 쓰인 MTL::RenderPassDescriptor 객체가 화면 비우기 명령을 인코딩합니다. 그 결과 뷰가 빨간색으로 칠해지게 됩니다.
+
+> [!NOTE]
+> Metal은 자동해제된 임시 객체에 의존합니다. 본 예제는 프레임이 시작될 때 NS::AutoreleasePool 객체를 만들어서 자동해제된 임시 객체들을 관리합니다. NS::AutoreleasePool은 임시 객체들을 트래킹하고, 프레임이 끝나고 NS::AutoreleasePool의 소멸자가 호출되었을 때 임시 객체들을 해제합니다. 자세한 내용은 metal-cpp 문서에 있습니다.
 
 
