@@ -104,6 +104,6 @@ draw()메소드는 다음과 같은 일을 합니다:
 본 예제에서 MTLRenderCommandEncoder 객체는 명시적으로 어떤 명령도 인코딩하지 않습니다. 하지만, 인코더를 생성할 때 쓰인 MTL::RenderPassDescriptor 객체가 화면 비우기 명령을 인코딩합니다. 그 결과 뷰가 빨간색으로 칠해지게 됩니다.
 
 > [!NOTE]
-> Metal은 자동해제된 임시 객체에 의존합니다. 본 예제는 프레임이 시작될 때 NS::AutoreleasePool 객체를 만들어서 자동해제된 임시 객체들을 관리합니다. NS::AutoreleasePool은 임시 객체들을 트래킹하고, 프레임이 끝나고 NS::AutoreleasePool의 소멸자가 호출되었을 때 임시 객체들을 해제합니다. 자세한 내용은 <a href="https://developer.apple.com/documentation/foundation/nsautoreleasepool/" title="NSAutoreleasePool | Apple Developer Documentation">metal 문서</a>에 있습니다.
+> Metal은 자동해제된 임시 객체에 의존합니다. 본 예제는 프레임이 시작될 때 NS::AutoreleasePool 객체를 만들어서 자동해제된 임시 객체들을 관리합니다. 생성된 객체는 임시 객체들을 트래킹하고, 프레임이 끝나고 본 객체의 소멸자가 호출되었을 때 임시 객체들을 해제합니다. 자세한 내용은 <a href="https://developer.apple.com/documentation/foundation/nsautoreleasepool/" title="NSAutoreleasePool | Apple Developer Documentation">metal 문서</a>에 있습니다.
 
 
